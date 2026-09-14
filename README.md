@@ -2,6 +2,10 @@
 
 A four-box drone instrument that a newcomer cannot play wrong, built in plain HTML and Web Audio, on its way to becoming a physical device.
 
+**Play it:** https://ianpilon.github.io/shruti-4/shruti-panel.html
+
+![Shruti 4 panel](docs/shruti-panel.png)
+
 Open any file directly in a browser. No build, no server, no dependencies.
 
 ## The instrument
