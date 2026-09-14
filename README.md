@@ -22,3 +22,12 @@ Open any file directly in a browser. No build, no server, no dependencies.
 - `atmosphere.html` – a synthesized study of commercial ambient pad loops, built from spectral measurements rather than samples. The measured loops themselves are not in this repo.
 
 Home is fixed at B2. The only intervals offered are the fourth and the fifth, so nothing can clash.
+
+## Building the physical device
+
+The web panel is the reference design for a hardware instrument. The plan lives in `docs/`:
+
+- [`docs/HARDWARE.md`](docs/HARDWARE.md) – parts list, panel layout, electronics (muxes, ladders, microcontroller), and the three build phases: tablet, hybrid panel over USB MIDI, standalone box.
+- [`docs/CONTROL-MAP.md`](docs/CONTROL-MAP.md) – every control, its range and curve, and its MIDI CC number and channel.
+- [`docs/ENGINE.md`](docs/ENGINE.md) – the sound engine in full, constants included, so it can be ported to C++.
+- [`docs/firmware/shruti4_controller/`](docs/firmware/shruti4_controller/) – a starter Arduino sketch (Raspberry Pi Pico or Teensy) that reads the panel and sends it as USB MIDI.
