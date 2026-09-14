@@ -1,6 +1,6 @@
 # Shruti 4 · Hardware build guide
 
-This is the plan for turning `shruti-panel.html` into a physical instrument. The web page is the reference design: every control on it is a real part, nothing lights up, and there are no presets. The panel is the sound.
+This is the plan for building Shruti 4 as a standalone physical instrument. `shruti-panel.html` is the reference design and the test bench, not a product: every control on it is a real part, nothing lights up, and there are no presets. The panel is the sound. The finished device has no screen and no computer you interact with.
 
 Companion documents:
 
@@ -8,21 +8,22 @@ Companion documents:
 - `ENGINE.md` – the sound engine, written so it can be ported line for line.
 - `firmware/shruti4_controller/shruti4_controller.ino` – a starter sketch that turns the panel into a USB MIDI controller.
 
-## 1. Architecture: three layers, built in three phases
+## 1. Architecture: three layers inside one box
 
 The design is split so the panel and the sound never have to know about each other.
 
 ```
- control surface  ──►  parameter table  ──►  sound engine
+ control surface  ──►  parameter table  ──►  sound engine  ──►  line out
  (knobs, faders,       (one number per        (oscillators, bellows,
   switches, ribbons)    control, 0..1)         drive, reverb)
 ```
 
-- **Phase 1, done.** Everything in software on a tablet or laptop. That is the web page.
-- **Phase 2, hybrid.** The real panel, wired to a small microcontroller that speaks USB MIDI. The web page listens over Web MIDI and plays the sound. You get the physical feel and can rework the panel before committing to a case. The engine is unchanged.
-- **Phase 3, standalone.** The same panel with the engine running inside the box. Two routes, see section 6.
+All three layers live inside the instrument. The build goes in two stages, both of which end with the same panel:
 
-Build Phase 2 first. Almost every decision about the panel gets made there, cheaply.
+- **Stage 1, the panel on the bench.** Wire the real controls to the controller board and confirm every one of them reads correctly. During this stage the reference web page is the sound engine, fed over a USB cable, purely so you can hear the panel while the embedded engine is being written. That is a test rig, not a product.
+- **Stage 2, the instrument.** The engine runs on an audio board inside the case, the USB cable goes away, and the box plays from its own line out the moment it is powered.
+
+Section 6 covers the two ways to do Stage 2.
 
 ## 2. The panel
 
@@ -99,8 +100,8 @@ Toggles go to 10 GPIO pins with internal pull-ups, or to one more 74HC165 if pin
 
 Any of these will do the whole job:
 
-- **Raspberry Pi Pico** (RP2040). Cheap, 3 analog pins, plenty of GPIO, USB MIDI through the TinyUSB library. The sketch in `firmware/` targets this.
-- **Teensy 4.0 or 4.1.** More analog pins, native USB MIDI in the Arduino menu, and it is also the board you would use for Phase 3 route B, so nothing is wasted.
+- **Teensy 4.1.** The recommended board, because it is also the board that runs the engine in Stage 2, so the bench wiring carries straight into the instrument. Native USB MIDI in the Arduino menu, plenty of analog and digital pins.
+- **Raspberry Pi Pico** (RP2040). Cheaper for a first breadboard, USB MIDI through the TinyUSB library. The sketch in `firmware/` builds for either.
 - **Arduino Leonardo or Pro Micro.** Works, USB MIDI via the MIDIUSB library, but slow and short on pins.
 
 ### Scan rate and smoothing
@@ -113,20 +114,19 @@ USB MIDI is a standard the web page already understands through Web MIDI. Each c
 
 Switches send 0 or 127. Pots, faders and ribbons send 0 to 127. 7-bit resolution is fine for everything here except possibly the fader; if you want finer voice control, send the fader as a 14-bit CC pair. The map reserves the pair.
 
-## 5. Phase 2 wiring and test plan
+## 5. Stage 1: bench wiring and test plan
 
-1. Wire one box's controls to the mux and the Pico on a breadboard. Load the sketch. Open a MIDI monitor and confirm each control sends its CC.
-2. Add Web MIDI to `shruti-panel.html` so it maps incoming CCs to the same functions the on-screen controls call. On-screen controls stay live too, so you can compare.
+1. Wire one box's controls to the mux and the controller on a breadboard. Load the sketch. Open a MIDI monitor and confirm each control sends its CC.
+2. Plug the controller into a laptop running `shruti-panel.html` with Web MIDI enabled, so the physical controls drive the reference engine. This is only to hear the panel before the embedded engine exists.
 3. Play it. Change the panel layout on paper until the hands are happy. Then cut the real panel.
 4. Wire the remaining three boxes and the header.
+5. Move to Stage 2. The laptop is never part of the finished instrument.
 
-## 6. Phase 3: making it standalone
+## 6. Stage 2: the engine inside the box
 
-**Route A, Raspberry Pi.** A Raspberry Pi 4 or 5 inside the case runs Chromium in kiosk mode showing `shruti-panel.html`, with the Pico plugged into it over USB. The Pi's audio jack or a small USB audio interface is the output. Zero porting. Costs a slow boot of about 20 seconds and a small screen if you want one, though the screen is optional: the panel is the interface.
+**Route A, dedicated audio board. This is the target.** Port `ENGINE.md` to C++ on a Teensy 4.1 with the Audio Shield, or on a Daisy Seed. The same board reads the panel and runs the engine, so the controller sketch and the engine become one program. Instant boot, latency under 2 ms, no operating system, no screen, nothing to update. The engine spec lists every filter, curve and constant so the port is mechanical rather than creative. Budget: the port is the largest single piece of work in the whole build.
 
-**Route B, dedicated audio board.** Port `ENGINE.md` to C++ on a Teensy 4.1 with the Audio Shield, or on a Daisy Seed. Instant boot, low latency, no operating system. The panel wiring is identical to Phase 2, the microcontroller just runs the engine as well as reading the controls. This is the real instrument, and it is the most work. The engine spec is written to make the port mechanical: every filter, curve and constant is listed.
-
-Start with Route A. Move to Route B only if boot time or latency bothers you in practice.
+**Route B, embedded Linux, a fallback.** A Raspberry Pi inside the case boots straight into a headless browser running `shruti-panel.html`, with the controller board on an internal USB cable and a USB audio interface for the output. No screen, no keyboard; from the outside it is identical to Route A. It avoids the port entirely at the cost of a 20 second boot and a general-purpose computer living in the box. Use it if you want to play the finished panel before the port is done, then replace the Pi with the audio board later. The panel and the controller wiring do not change.
 
 ## 7. Audio output
 
@@ -134,12 +134,12 @@ Stereo line out on two 6.35 mm jacks or one 3.5 mm TRS. Width and Pan only mean 
 
 ## 8. Power
 
-The Pico route draws under 100 mA at 5 V, so USB power from the host is enough for Phase 2. For Phase 3 Route A, the Pi wants a proper 5 V 3 A supply. Route B on a Teensy is back under 200 mA.
+On the bench the controller draws under 100 mA at 5 V, so USB power from the laptop is enough. The finished instrument on a Teensy or Daisy draws under 200 mA: a 5 V wall adapter or a USB-C power input is fine. The Pi fallback wants a proper 5 V 3 A supply.
 
 ## 9. What is deliberately not on the panel
 
 - **No presets.** The panel is the sound. Photograph it if you want to remember a setting.
 - **No lights.** State is always readable from the physical position of a part.
-- **No screen.** The web page shows numbers for convenience while designing; the device does not.
+- **No screen, no computer to interact with.** The web page shows numbers for convenience while designing; the device shows nothing.
 - **No hold button.** Turning Pump all the way down is hold.
 - **Only Fourth and Fifth.** The two intervals that cannot clash. Nothing else is offered.
