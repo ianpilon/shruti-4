@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shruti Quartet</title>
+<style>
+  :root { --bg:#0a1020; --card:#10192d; --line:#1d2a45; --ink:#e8edf7; --dim:#8a97b3; --accent:#4fd1ff; color-scheme: dark; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 -apple-system, system-ui, "Inter", sans-serif; display:flex; flex-direction:column; gap:14px; padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom)); -webkit-user-select:none; user-select:none; touch-action:none; overscroll-behavior:none; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0 4px; color:var(--dim); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+  header b { color:var(--ink); font-weight:600; letter-spacing:0; text-transform:none; font-size:15px; }
+
+  /* Two-position switch: Fourth or Fifth, for all four boxes */
+  .sw { position:relative; display:grid; grid-template-columns:1fr 1fr; width:min(360px, 60vw); height:48px; border-radius:14px; background:var(--card); border:1px solid var(--line); cursor:pointer; touch-action:none; }
+  .sw .k { position:absolute; top:4px; bottom:4px; width:calc(50% - 6px); left:4px; border-radius:11px; background:linear-gradient(#22304f,#182440); border:1px solid #2f4370; box-shadow:0 4px 14px rgba(0,0,0,.4); transition:left .18s cubic-bezier(.2,.8,.2,1); }
+  .sw.fifth .k { left:calc(50% + 2px); }
+  .sw div.lab { position:relative; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:300; color:var(--dim); letter-spacing:0; text-transform:none; pointer-events:none; }
+  .sw div.lab.on { color:var(--accent); text-shadow:0 0 14px rgba(79,209,255,.6); font-weight:400; }
+
+  main { flex:1; min-height:0; display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+  .strip { position:relative; border-radius:22px; background:var(--card); border:1px solid var(--line); overflow:hidden; cursor:pointer; touch-action:none; transition:border-color .2s; }
+  .strip.on { border-color:rgba(79,209,255,.45); }
+  .strip .level { position:absolute; left:0; right:0; bottom:0; height:0%; background:linear-gradient(rgba(79,209,255,.02), rgba(79,209,255,.28)); pointer-events:none; }
+  .strip .glow { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 70%, rgba(79,209,255,.5), transparent 70%); opacity:0; pointer-events:none; }
+  .strip .offzone { position:absolute; left:0; right:0; bottom:0; height:12%; border-top:1px dashed #2c3d63; display:flex; align-items:center; justify-content:center; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#4b5a7c; pointer-events:none; }
+  .strip .handle { position:absolute; left:10px; right:10px; height:0; border-top:2px solid var(--accent); box-shadow:0 0 14px rgba(79,209,255,.8); opacity:0; pointer-events:none; }
+  .strip .handle::after { content:""; position:absolute; left:50%; top:-7px; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--accent); }
+  .strip.on .handle { opacity:1; }
+  .strip .top { position:absolute; left:0; right:0; top:14px; text-align:center; pointer-events:none; }
+  .strip .top .n { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); }
+  .strip .top .r { font-size:clamp(18px, 3.2vw, 30px); font-weight:200; margin-top:4px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .strip.on .top .r { color:var(--ink); }
+  .strip .ticks { position:absolute; left:0; right:0; top:0; bottom:12%; pointer-events:none; }
+  .strip .ticks i { position:absolute; left:14px; right:14px; border-top:1px solid rgba(255,255,255,.05); }
+  footer { color:var(--dim); font-size:12px; text-align:center; }
+  kbd { font:11px ui-monospace, Menlo, monospace; background:#0b1324; border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+</style>
+</head>
+<body>
+  <header>
+    <span><b>Shruti Quartet</b> · four boxes · B2</span>
+    <div class="sw" id="sw"><div class="k"></div><div class="lab" id="lab-fourth">Fourth</div><div class="lab on" id="lab-fifth">Fifth</div></div>
+  </header>
+  <main id="strips"></main>
+  <footer>Slide up and down on a strip to set that box's pumping speed. Higher is faster. It keeps playing when you lift off. Bottom band stops it. <kbd>Space</kbd> stops all.</footer>
+
+<script>
+'use strict';
+const HOME_HZ = 123.47, DRIFT = 10.5, N_BOX = 4;
+const REEDS = { home: 1, fourth: 4 / 3, fifth: 3 / 2, octave: 2 };
+const MODES = { fourth: ['home', 'fourth', 'octave'], fifth: ['home', 'fifth', 'octave'] };
+const RATE_MIN = 0.19, RATE_MAX = 6;      // strokes per second
+const OFF_ZONE = 0.12;                    // bottom fraction of a strip that means "off"
+const BOX_OFFSETS = [0, 3.5, -2.5, 5];    // cents: four real boxes are never tuned identically
+const $ = id => document.getElementById(id);
+
+let ctx = null, S = null;                 // S = shared audio
+let mode = 'fifth';
+const boxes = [];
+
+// ---------- Audio ----------
+function reedWave() {
+  const N = 64, re = new Float32Array(N), im = new Float32Array(N);
+  for (let n = 1; n < N; n++) { let a = 1 / Math.pow(n, 1.05); if (n >= 3 && n <= 7) a *= 1.35; if (n > 30) a *= Math.pow(0.9, n - 30); im[n] = a; }
+  return ctx.createPeriodicWave(re, im);
+}
+function ensureAudio() {
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; };
+  S = { g, wave: reedWave() };
+  // Shared body: boxes -> body resonances -> highpass -> master
+  S.body = g(1);
+  S.f1 = ctx.createBiquadFilter(); S.f1.type = 'peaking'; S.f1.frequency.value = 620; S.f1.Q.value = 1.6; S.f1.gain.value = 5;
+  S.f2 = ctx.createBiquadFilter(); S.f2.type = 'peaking'; S.f2.frequency.value = 1750; S.f2.Q.value = 2.2; S.f2.gain.value = 4;
+  S.hp = ctx.createBiquadFilter(); S.hp.type = 'highpass'; S.hp.frequency.value = 70;
+  S.master = g(0.45);
+  S.body.connect(S.f1).connect(S.f2).connect(S.hp).connect(S.master).connect(ctx.destination);
+  const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  S.noise = ctx.createBufferSource(); S.noise.buffer = buf; S.noise.loop = true; S.noise.start();
+  S.nbp = ctx.createBiquadFilter(); S.nbp.type = 'bandpass'; S.nbp.frequency.value = 2600; S.nbp.Q.value = 0.7;
+  S.noise.connect(S.nbp);
+  boxes.forEach(buildBox);
+}
+function buildBox(b) {
+  const g = S.g, a = { reeds: {} };
+  a.sum = g(1);
+  a.lp = ctx.createBiquadFilter(); a.lp.type = 'lowpass'; a.lp.frequency.value = 2500; a.lp.Q.value = 0.3;
+  a.pressure = g(0);
+  a.sum.connect(a.lp).connect(a.pressure).connect(S.body);
+  a.ngain = g(0); S.nbp.connect(a.ngain).connect(a.pressure);
+  a.bend = ctx.createConstantSource(); a.bend.offset.value = 0; a.bend.start();
+  Object.keys(REEDS).forEach((id, i) => {
+    const o = ctx.createOscillator(); o.setPeriodicWave(S.wave); o.frequency.value = HOME_HZ * REEDS[id];
+    o.detune.value = BOX_OFFSETS[b.i];
+    const gate = g(0), lfo = ctx.createOscillator(), lg = g(DRIFT);
+    lfo.frequency.value = 1 / (15 + i * 6.3 + b.i * 2.7);   // every reed in every box drifts at its own pace
+    lfo.connect(lg).connect(o.detune); a.bend.connect(o.detune);
+    o.connect(gate).connect(a.sum); o.start(); lfo.start();
+    a.reeds[id] = { o, gate };
+  });
+  b.a = a;
+  applyReeds(b);
+}
+const now = () => ctx.currentTime;
+function applyReeds(b) {
+  if (!b.a) return;
+  const open = b.on ? MODES[mode] : [];
+  Object.entries(b.a.reeds).forEach(([id, r]) => {
+    const want = open.includes(id), t = now();
+    r.gate.gain.cancelScheduledValues(t); r.gate.gain.setValueAtTime(r.gate.gain.value, t);
+    if (want && r.gate.gain.value < 0.01) { r.gate.gain.linearRampToValueAtTime(0.16, t + 0.28); r.o.detune.cancelScheduledValues(t); r.o.detune.setValueAtTime(BOX_OFFSETS[b.i] - 25, t); r.o.detune.linearRampToValueAtTime(BOX_OFFSETS[b.i], t + 0.35); }
+    else if (want) r.gate.gain.linearRampToValueAtTime(0.16, t + 0.1);
+    else r.gate.gain.linearRampToValueAtTime(0, t + 0.18);
+  });
+}
+
+// ---------- Strips ----------
+const strips = $('strips');
+for (let i = 0; i < N_BOX; i++) {
+  const el = document.createElement('div'); el.className = 'strip';
+  el.innerHTML = `<div class="ticks">${[0.2,0.4,0.6,0.8].map(f => `<i style="top:${f*100}%"></i>`).join('')}</div><div class="level"></div><div class="glow"></div><div class="handle"></div><div class="top"><div class="n">Box ${i + 1}</div><div class="r">off</div></div><div class="offzone">off</div>`;
+  strips.appendChild(el);
+  const b = { i, el, on: false, y: 0, rate: RATE_MIN, pressure: 0, target: 0, phase: Math.random(), a: null,
+    level: el.querySelector('.level'), glow: el.querySelector('.glow'), handle: el.querySelector('.handle'), r: el.querySelector('.r') };
+  boxes.push(b);
+  const setFromEvent = e => {
+    const rc = el.getBoundingClientRect();
+    const y = Math.max(0, Math.min(1, 1 - (e.clientY - rc.top) / rc.height));   // 0 bottom .. 1 top
+    if (y < OFF_ZONE) { setBox(b, false, y); return; }
+    const f = (y - OFF_ZONE) / (1 - OFF_ZONE);
+    setBox(b, true, y, RATE_MIN * Math.pow(RATE_MAX / RATE_MIN, f));
+  };
+  el.addEventListener('pointerdown', e => { ensureAudio(); try { el.setPointerCapture(e.pointerId); } catch (_) {} b.drag = e.pointerId; setFromEvent(e); });
+  el.addEventListener('pointermove', e => { if (b.drag === e.pointerId) setFromEvent(e); });
+  const up = e => { if (b.drag === e.pointerId) b.drag = null; };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+}
+function setBox(b, on, y, rate) {
+  const was = b.on;
+  b.on = on; b.y = y; if (rate) b.rate = rate;
+  if (on !== was) applyReeds(b);
+  b.el.classList.toggle('on', on);
+  b.handle.style.bottom = (y * 100) + '%';
+  b.r.textContent = on ? (b.rate < 1 ? Math.round(b.rate * 60) + ' / min' : b.rate.toFixed(1) + ' / s') : 'off';
+}
+function stopAll() { boxes.forEach(b => setBox(b, false, 0)); }
+
+// ---------- Switch ----------
+const sw = $('sw');
+function setMode(m) {
+  ensureAudio();
+  mode = m;
+  sw.classList.toggle('fifth', m === 'fifth');
+  $('lab-fourth').classList.toggle('on', m === 'fourth'); $('lab-fifth').classList.toggle('on', m === 'fifth');
+  boxes.forEach(applyReeds);
+}
+sw.addEventListener('pointerdown', e => { const rc = sw.getBoundingClientRect(); setMode((e.clientX - rc.left) < rc.width / 2 ? 'fourth' : 'fifth'); });
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); stopAll(); }
+  else if (e.key === 'ArrowLeft') setMode('fourth');
+  else if (e.key === 'ArrowRight') setMode('fifth');
+});
+
+// ---------- Bellows, one per box ----------
+let last = performance.now();
+function tick() {
+  const t = performance.now(), dt = Math.min(0.05, (t - last) / 1000); last = t;
+  boxes.forEach(b => {
+    if (b.on && b.a) {
+      b.phase += dt * b.rate;
+      const s = Math.sin(b.phase * 2 * Math.PI), depth = 0.28 + 0.12 * Math.min(1, b.rate / 2);
+      b.target = 0.62 + depth * Math.sign(s) * Math.pow(Math.abs(s), 0.6);
+    } else b.target = 0;
+    const k = b.target > b.pressure ? Math.max(4.5, b.rate * 9) : Math.max(1.1, b.rate * 5);
+    b.pressure += (b.target - b.pressure) * Math.min(1, k * dt);
+    const p = b.pressure;
+    if (b.a) {
+      const at = now();
+      b.a.pressure.gain.setTargetAtTime(Math.pow(p, 1.35), at, 0.03);
+      b.a.lp.frequency.setTargetAtTime(1400 + 4200 * p, at, 0.05);
+      b.a.ngain.gain.setTargetAtTime(0.03 * p, at, 0.05);
+      b.a.bend.offset.setTargetAtTime(-9 * p, at, 0.05);
+    }
+    b.level.style.height = Math.round(p * 100) + '%';
+    b.glow.style.opacity = b.on ? (0.15 + 0.7 * p).toFixed(3) : 0;
+  });
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

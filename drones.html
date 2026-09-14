@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drone Anatomy</title>
+<style>
+  :root {
+    --bg: #0a1020; --card: #10192d; --line: #1d2a45; --ink: #e8edf7; --dim: #8a97b3;
+    --accent: #4fd1ff; --trace: #4fd1ff; --on: #4fd1ff;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, system-ui, "Inter", "Segoe UI", sans-serif; padding: 28px 16px 80px; }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; margin-bottom: 26px; }
+  h1 { font-size: 30px; font-weight: 300; letter-spacing: .01em; margin: 0; }
+  h1 b { font-weight: 600; }
+  header p { margin: 4px 0 0; color: var(--dim); max-width: 560px; }
+  .master { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--dim); font-size: 13px; }
+  .master input { width: 140px; }
+  .station { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin-bottom: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px 26px; }
+  @media (max-width: 760px) { .station { grid-template-columns: minmax(0, 1fr); } }
+  .station.on { border-color: rgba(79,209,255,.45); box-shadow: 0 0 0 1px rgba(79,209,255,.15), 0 0 40px rgba(79,209,255,.06) inset; }
+  .num { font-size: 44px; font-weight: 200; color: var(--accent); line-height: 1; letter-spacing: -.02em; }
+  h2 { font-size: 19px; font-weight: 600; margin: 8px 0 8px; }
+  .text p { margin: 0 0 10px; color: #c5cee0; }
+  .listen { border-left: 2px solid var(--accent); padding-left: 10px; color: var(--dim); font-size: 14px; }
+  .listen b { color: var(--ink); font-weight: 600; }
+  .panel { min-width: 0; }
+  canvas.scope { display: block; width: 100%; height: 130px; background: #070c18; border-radius: 8px; border: 1px solid var(--line); }
+  .knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 18px; margin-top: 14px; }
+  .knob label { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  .knob output { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .knob input[type=range] { width: 100%; margin: 6px 0 0; accent-color: var(--accent); }
+  .knob select { width: 100%; margin-top: 6px; background: #0b1324; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; font: inherit; }
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); border-radius: 8px; background: #0b1324; color: var(--ink); padding: 8px 16px; }
+  button:hover { border-color: #2c3d63; }
+  button.play { min-width: 96px; font-weight: 600; }
+  .on button.play { background: var(--accent); color: #05101c; border-color: var(--accent); }
+  .readout { color: var(--dim); font-size: 13px; }
+  .readout b { color: var(--accent); font-weight: 600; }
+  .warn { color: var(--dim); font-size: 13px; margin: 0 0 22px; }
+  footer { color: var(--dim); font-size: 13px; margin-top: 30px; }
+  kbd { font: 12px ui-monospace, Menlo, monospace; background: #0b1324; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><b>Drone Anatomy</b> · eight ways a tone becomes a drone</h1>
+      <p>Each station is a small live patch built from the same oscillators as the tone generator. Press Play, turn the knobs, watch the trace. One station plays at a time.</p>
+    </div>
+    <div class="master"><span>Master</span><input id="master" type="range" min="0" max="100" value="40"><output id="master-out">40%</output><button id="stop-all">Stop</button></div>
+  </header>
+  <p class="warn">Start quiet. Station 8 and high resonance on station 5 can get loud fast. <kbd>Space</kbd> stops whatever is playing.</p>
+  <div id="stations"></div>
+  <footer>Companion to <a href="index.html" style="color:inherit">the tone generator</a>. All sound is generated live in the browser with Web Audio; nothing is sampled.</footer>
+</div>
+
+<script>
+'use strict';
+// ------------------------------------------------------------------
+// Station definitions. Each build(ctx, out) wires a patch into `out`
+// and returns { knobs: [...], stop(), base } where base is the pitch
+// the scope should frame, and knobs are UI specs bound to live params.
+// ------------------------------------------------------------------
+const NOW = () => ctx.currentTime;
+const smooth = (param, v, tc = 0.02) => param.setTargetAtTime(v, NOW(), tc);
+const osc = (type, freq) => { const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; o.start(); return o; };
+const gain = (v) => { const g = ctx.createGain(); g.gain.value = v; return g; };
+const fmt = { hz: v => v.toFixed(2) + ' Hz', hz0: v => Math.round(v) + ' Hz', cents: v => v.toFixed(1) + ' ¢', pct: v => Math.round(v * 100) + '%', s: v => v.toFixed(2) + ' s', x: v => v.toFixed(2) + '×', n: v => String(Math.round(v)), db: v => v.toFixed(1) + ' dB' };
+
+const STATIONS = [
+{
+  id: 'beat', title: 'Beating', scope: 'env',
+  text: `Two sine waves almost the same pitch. They slide in and out of step, so the sum swells and fades. The throb speed is exactly the difference between the two frequencies.`,
+  listen: `Set the gap to <b>1 Hz</b>: one slow breath per second. Push it to <b>8 Hz</b>: a fast shimmer. Above <b>15 Hz</b> it stops being a pulse and becomes a rough buzz. The trace is the loudness over the last eight seconds.`,
+  build(out) {
+    const a = osc('sine', 220), b = osc('sine', 220), ga = gain(0.5), gb = gain(0.5);
+    a.connect(ga).connect(out); b.connect(gb).connect(out);
+    const rd = document.createElement('span');
+    const set = d => { smooth(b.frequency, 220 + d); rd.innerHTML = d < 0.05 ? 'no beating' : d < 1 ? 'one beat every <b>' + (1 / d).toFixed(1) + ' s</b>' : '<b>' + d.toFixed(1) + '</b> beats per second'; };
+    return { base: 220, readout: rd, knobs: [
+      { label: 'Gap between the two tones', min: 0, max: 20, step: 0.1, value: 1, fmt: fmt.hz, set },
+    ], stop() { a.stop(); b.stop(); } };
+  }
+},
+{
+  id: 'cluster', title: 'More oscillators, more beating', scope: 'env',
+  text: `Four oscillators, each a little off from 220 Hz by a different amount. Every pair beats at its own speed, and the overlapping throbs make a pattern that never quite repeats.`,
+  listen: `Start with <b>2 voices</b> and hear one clean throb. Add the third and fourth: the pulse turns into a slow churn. Widen the <b>spread</b> and it gets restless; narrow it and it calms to a glow.`,
+  build(out) {
+    const offs = [-1.7, -0.6, 0.9, 2.3];
+    const os = offs.map(() => osc('sine', 220)), gs = offs.map(() => gain(0.28));
+    os.forEach((o, i) => o.connect(gs[i]).connect(out));
+    let spread = 1, voices = 4;
+    const apply = () => os.forEach((o, i) => { smooth(o.frequency, 220 + offs[i] * spread); smooth(gs[i].gain, i < voices ? 0.28 : 0); });
+    apply();
+    return { base: 220, knobs: [
+      { label: 'Voices', min: 2, max: 4, step: 1, value: 4, fmt: fmt.n, set: v => { voices = v; apply(); } },
+      { label: 'Spread', min: 0, max: 3, step: 0.05, value: 1, fmt: fmt.x, set: v => { spread = v; apply(); } },
+    ], stop() { os.forEach(o => o.stop()); } };
+  }
+},
+{
+  id: 'drift', title: 'Drift and slow modulation', scope: 'env',
+  text: `Three oscillators in unison, each nudged by its own very slow LFO (a low-frequency oscillator, one cycle every 20 to 50 seconds). The beating speeds themselves keep changing, so the sound never settles.`,
+  listen: `At <b>depth 0</b> the three lock into one dead tone. Add a few cents of depth and it starts to breathe unevenly. Raise <b>speed</b> and the breathing turns into a slow wobble. Analog oscillators do this on their own as they warm up.`,
+  build(out) {
+    const rates = [1 / 23, 1 / 37, 1 / 51];
+    const os = rates.map(() => osc('sine', 220)), gs = rates.map(() => gain(0.32));
+    const lfos = rates.map(r => osc('sine', r)), lg = rates.map(() => gain(0));
+    os.forEach((o, i) => { o.connect(gs[i]).connect(out); lfos[i].connect(lg[i]).connect(o.detune); });
+    let depth = 8, speed = 1;
+    const apply = () => rates.forEach((r, i) => { smooth(lg[i].gain, depth); smooth(lfos[i].frequency, r * speed); });
+    apply();
+    return { base: 220, knobs: [
+      { label: 'Drift depth', min: 0, max: 40, step: 0.5, value: 8, fmt: fmt.cents, set: v => { depth = v; apply(); } },
+      { label: 'Drift speed', min: 0.2, max: 8, step: 0.1, value: 1, fmt: fmt.x, set: v => { speed = v; apply(); } },
+    ], stop() { os.concat(lfos).forEach(o => o.stop()); } };
+  }
+},
+{
+  id: 'ratio', title: 'Harmonic tuning', scope: 'wave',
+  text: `A fundamental at 110 Hz, a fifth above it, and an octave above that. A pure fifth is exactly 3:2. Piano tuning uses 2.996:2 instead, two cents flat, which is why piano fifths shimmer slightly. Here you can set the fifth anywhere.`,
+  listen: `At <b>0 ¢</b> the three fuse into one big tone and the trace freezes: the wave repeats exactly. Nudge to <b>+3 ¢</b> and the picture starts to crawl and the sound glows. At <b>−2 ¢</b> you are hearing a piano's fifth.`,
+  build(out) {
+    const f = osc('triangle', 110), fifth = osc('triangle', 165), oct = osc('triangle', 220);
+    const gf = gain(0.34), g5 = gain(0.26), go = gain(0.18);
+    f.connect(gf).connect(out); fifth.connect(g5).connect(out); oct.connect(go).connect(out);
+    return { base: 110, cycles: 2, knobs: [
+      { label: 'Fifth offset from pure 3:2', min: -12, max: 12, step: 0.1, value: 0, fmt: fmt.cents, set: v => smooth(fifth.frequency, 165 * Math.pow(2, v / 1200)) },
+      { label: 'Octave level', min: 0, max: 0.4, step: 0.01, value: 0.18, fmt: fmt.pct, set: v => smooth(go.gain, v) },
+    ], stop() { [f, fifth, oct].forEach(o => o.stop()); } };
+  }
+},
+{
+  id: 'filter', title: 'Resonant filter, swept slowly', scope: 'wave',
+  text: `Two detuned sawtooths, rich in overtones, go through a low-pass filter. Resonance boosts whatever sits at the cutoff point. A slow LFO moves the cutoff up and down, so different overtones light up one after another.`,
+  listen: `With <b>resonance</b> low it is a gentle brightening and darkening. Push resonance up and you hear a vowel-like whistle riding the sweep, and the trace grows a ringing ripple. Slow the <b>sweep</b> right down for the classic drone.`,
+  build(out) {
+    const a = osc('sawtooth', 110), b = osc('sawtooth', 110.6), mix = gain(0.22);
+    const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 500; flt.Q.value = 8;
+    const lfo = osc('sine', 0.08), depth = gain(350);
+    a.connect(mix); b.connect(mix); mix.connect(flt).connect(out);
+    lfo.connect(depth).connect(flt.frequency);
+    return { base: 110, cycles: 2, knobs: [
+      { label: 'Resonance', min: 0, max: 24, step: 0.5, value: 8, fmt: fmt.db, set: v => smooth(flt.Q, v) },
+      { label: 'Sweep speed', min: 0.01, max: 1, step: 0.01, value: 0.08, fmt: fmt.hz, set: v => smooth(lfo.frequency, v) },
+      { label: 'Cutoff centre', min: 150, max: 2000, step: 10, value: 500, fmt: fmt.hz0, set: v => { smooth(flt.frequency, v); smooth(depth.gain, v * 0.7); } },
+    ], stop() { [a, b, lfo].forEach(o => o.stop()); } };
+  }
+},
+{
+  id: 'xmod', title: 'Feedback and cross-modulation', scope: 'wave',
+  text: `Two oscillators wired into each other: A pushes the pitch of B around, and B pushes the pitch of A. With the loop closed, small changes cascade and the pair behaves more like a living thing than a machine.`,
+  listen: `Both depths at <b>0</b> is just two tones. Raise <b>A → B</b> alone and B grows metallic overtones (this is FM). Raise <b>B → A</b> as well and the loop closes: expect growls, chirps and sudden jumps. Change the <b>B pitch</b> and the whole character flips.`,
+  build(out) {
+    const a = osc('triangle', 110), b = osc('triangle', 165);
+    const ga = gain(0.3), gb = gain(0.3), mAB = gain(0), mBA = gain(0);
+    const dAB = ctx.createDelay(0.01), dBA = ctx.createDelay(0.01); dAB.delayTime.value = dBA.delayTime.value = 128 / ctx.sampleRate;
+    a.connect(ga).connect(out); b.connect(gb).connect(out);
+    a.connect(mAB).connect(dAB).connect(b.frequency);
+    b.connect(mBA).connect(dBA).connect(a.frequency);
+    return { base: 110, cycles: 2, knobs: [
+      { label: 'A → B depth', min: 0, max: 600, step: 1, value: 0, fmt: fmt.hz0, set: v => smooth(mAB.gain, v) },
+      { label: 'B → A depth', min: 0, max: 600, step: 1, value: 0, fmt: fmt.hz0, set: v => smooth(mBA.gain, v) },
+      { label: 'B pitch', min: 55, max: 880, step: 1, value: 165, fmt: fmt.hz0, set: v => smooth(b.frequency, v) },
+    ], stop() { a.stop(); b.stop(); } };
+  }
+},
+{
+  id: 'space', title: 'Space: delay and reverb', scope: 'env',
+  text: `A quiet two-note drone feeds a delay line that echoes back into itself, then a reverb. Events smear into a wash, and sound keeps going after you touch nothing.`,
+  listen: `Press <b>Swell</b> to send a short note in. With feedback low it echoes twice and dies. Raise <b>feedback</b> toward 90% and the echoes pile up into a texture. Turn <b>reverb</b> up and even the dry drone loses its edges. Most drone records are at least half this.`,
+  build(out) {
+    const a = osc('sine', 220), b = osc('sine', 330), bed = gain(0.10), swell = gain(0);
+    const dry = gain(0.7), delay = ctx.createDelay(2), fb = gain(0.5), wetD = gain(0.6);
+    const conv = ctx.createConvolver(); conv.buffer = impulse(3.5, 2.8); const wetR = gain(0.4);
+    delay.delayTime.value = 0.42;
+    a.connect(bed); b.connect(bed); a.connect(swell); b.connect(swell);
+    const src = gain(1); bed.connect(src); swell.connect(src);
+    src.connect(dry).connect(out);
+    src.connect(delay); delay.connect(fb).connect(delay); delay.connect(wetD).connect(out);
+    src.connect(conv); delay.connect(conv); conv.connect(wetR).connect(out);
+    const btn = document.createElement('button'); btn.textContent = 'Swell';
+    btn.onclick = () => { const t = NOW(); swell.gain.cancelScheduledValues(t); swell.gain.setValueAtTime(swell.gain.value, t); swell.gain.linearRampToValueAtTime(0.5, t + 0.08); swell.gain.linearRampToValueAtTime(0, t + 0.5); };
+    return { base: 220, extra: btn, knobs: [
+      { label: 'Delay feedback', min: 0, max: 0.95, step: 0.01, value: 0.5, fmt: fmt.pct, set: v => smooth(fb.gain, v) },
+      { label: 'Delay time', min: 0.1, max: 1.5, step: 0.01, value: 0.42, fmt: fmt.s, set: v => smooth(delay.delayTime, v, 0.1) },
+      { label: 'Reverb', min: 0, max: 1, step: 0.01, value: 0.4, fmt: fmt.pct, set: v => smooth(wetR.gain, v) },
+    ], stop() { a.stop(); b.stop(); } };
+  }
+},
+{
+  id: 'dirt', title: 'Dirt', scope: 'wave',
+  text: `Two clean sines (110 and 165 Hz) pushed through a waveshaper, a curve that bends the signal. Bending adds overtones that were not there, and those new overtones beat against everything else.`,
+  listen: `At <b>drive 1</b> the trace is two smooth sines added together. Turn it up: <b>soft</b> squashes the peaks and warms the tone, <b>hard</b> flattens them into a buzz, <b>fold</b> bends the peaks back on themselves and turns the sound inside out. Watch the shape change as you hear it.`,
+  build(out) {
+    const a = osc('sine', 110), b = osc('sine', 165), pre = gain(0.5);
+    const ws = ctx.createWaveShaper(); ws.oversample = '4x';
+    const post = ctx.createBiquadFilter(); post.type = 'lowpass'; post.frequency.value = 6000;
+    const lvl = gain(0.45);
+    a.connect(pre); b.connect(pre); pre.connect(ws).connect(post).connect(lvl).connect(out);
+    let drive = 1, mode = 'soft';
+    const curve = () => {
+      const N = 2048, c = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        const x = (i / (N - 1)) * 2 - 1, y = x * drive;
+        c[i] = mode === 'soft' ? Math.tanh(y) : mode === 'hard' ? Math.max(-1, Math.min(1, y)) : Math.sin(y * 1.4);
+      }
+      ws.curve = c;
+    };
+    curve();
+    const sel = document.createElement('select');
+    [['soft', 'Soft (tanh)'], ['hard', 'Hard clip'], ['fold', 'Wavefold']].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
+    sel.onchange = () => { mode = sel.value; curve(); };
+    return { base: 110, cycles: 2, knobs: [
+      { label: 'Drive', min: 1, max: 30, step: 0.1, value: 1, fmt: fmt.x, set: v => { drive = v; curve(); } },
+      { label: 'Shape', el: sel },
+    ], stop() { a.stop(); b.stop(); } };
+  }
+},
+];
+
+// Synthetic reverb impulse: stereo noise with an exponential tail.
+function impulse(seconds, decay) {
+  const len = Math.floor(ctx.sampleRate * seconds), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+  return buf;
+}
+
+// ------------------------------------------------------------------
+// Runtime: one AudioContext, one master, one active station at a time.
+// ------------------------------------------------------------------
+let ctx = null, master = null, active = null;
+const FADE = 0.4;
+function ensureAudio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = gain(+els.master.value / 100); master.connect(ctx.destination);
+  }
+  if (ctx.state === 'suspended') ctx.resume();
+}
+
+const els = { master: document.getElementById('master'), masterOut: document.getElementById('master-out'), stations: document.getElementById('stations') };
+els.master.oninput = () => { els.masterOut.textContent = els.master.value + '%'; if (master) smooth(master.gain, +els.master.value / 100); };
+
+function buildUI() {
+  STATIONS.forEach((st, i) => {
+    const card = document.createElement('section'); card.className = 'station'; card.id = 'st-' + st.id;
+    card.innerHTML = `
+      <div class="text"><div class="num">${String(i + 1).padStart(2, '0')}</div><h2>${st.title}</h2><p>${st.text}</p><p class="listen">${st.listen}</p></div>
+      <div class="panel"><canvas class="scope"></canvas><div class="knobs"></div><div class="actions"><button class="play">Play</button><span class="readout"></span></div></div>`;
+    st.card = card; st.canvas = card.querySelector('.scope'); st.knobsEl = card.querySelector('.knobs');
+    st.playBtn = card.querySelector('.play'); st.actions = card.querySelector('.actions'); st.readoutEl = card.querySelector('.readout');
+    st.playBtn.onclick = () => toggle(st);
+    st.env = [];
+    els.stations.appendChild(card);
+    drawScope(st);
+  });
+}
+
+function renderKnobs(st, live) {
+  st.knobsEl.innerHTML = '';
+  live.knobs.forEach(k => {
+    const w = document.createElement('div'); w.className = 'knob';
+    const lab = document.createElement('label'); lab.innerHTML = `<span>${k.label}</span>`; w.appendChild(lab);
+    if (k.el) { w.appendChild(k.el); }
+    else {
+      const out = document.createElement('output'); out.textContent = k.fmt(k.value); lab.appendChild(out);
+      const r = document.createElement('input'); r.type = 'range'; r.min = k.min; r.max = k.max; r.step = k.step; r.value = k.value;
+      r.oninput = () => { const v = +r.value; out.textContent = k.fmt(v); k.set(v); };
+      w.appendChild(r); k.set(k.value);
+    }
+    st.knobsEl.appendChild(w);
+  });
+  st.actions.querySelectorAll('.extra').forEach(e => e.remove());
+  if (live.extra) { live.extra.classList.add('extra'); st.actions.insertBefore(live.extra, st.readoutEl); }
+  st.readoutEl.innerHTML = ''; if (live.readout) st.readoutEl.appendChild(live.readout);
+}
+
+function toggle(st) {
+  ensureAudio();
+  if (active === st) return stopActive();
+  stopActive();
+  const out = gain(0); out.connect(master);
+  const an = ctx.createAnalyser(); an.fftSize = 4096; out.connect(an);
+  const live = st.build(out);
+  live.out = out; live.analyser = an; st.live = live;
+  renderKnobs(st, live);
+  out.gain.setValueAtTime(0, NOW()); out.gain.linearRampToValueAtTime(1, NOW() + FADE);
+  st.card.classList.add('on'); st.playBtn.textContent = 'Stop';
+  st.env = []; active = st;
+  requestAnimationFrame(() => loop(st));
+}
+function stopActive() {
+  if (!active) return;
+  const st = active, live = st.live; active = null;
+  live.out.gain.cancelScheduledValues(NOW()); live.out.gain.setValueAtTime(live.out.gain.value, NOW());
+  live.out.gain.linearRampToValueAtTime(0, NOW() + FADE);
+  setTimeout(() => { live.stop(); live.out.disconnect(); }, FADE * 1000 + 300);
+  st.card.classList.remove('on'); st.playBtn.textContent = 'Play';
+  setTimeout(() => { st.live = null; drawScope(st); }, FADE * 1000 + 350);
+}
+document.getElementById('stop-all').onclick = stopActive;
+document.addEventListener('keydown', e => { if (e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') { e.preventDefault(); stopActive(); } });
+
+// ------------------------------------------------------------------
+// Scopes. 'wave' frames a few cycles of the base pitch, trigger-locked.
+// 'env' plots peak loudness over the last 8 seconds, so slow throbs show.
+// ------------------------------------------------------------------
+const ENV_SECONDS = 8;
+function loop(st) {
+  if (st.live) { drawScope(st); requestAnimationFrame(() => loop(st)); }
+}
+function drawScope(st) {
+  const c = st.canvas, dpr = window.devicePixelRatio || 1;
+  const w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const g = c.getContext('2d'), W = c.width, H = c.height, mid = H / 2;
+  g.fillStyle = '#070c18'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = 'rgba(255,255,255,0.06)'; g.lineWidth = 1; g.beginPath();
+  for (let i = 1; i < 8; i++) { g.moveTo(W * i / 8, 0); g.lineTo(W * i / 8, H); }
+  for (let i = 1; i < 4; i++) { g.moveTo(0, H * i / 4); g.lineTo(W, H * i / 4); }
+  g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.16)'; g.beginPath(); g.moveTo(0, mid); g.lineTo(W, mid); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = (11 * dpr) + 'px system-ui, sans-serif'; g.textAlign = 'right';
+  const live = st.live;
+  g.strokeStyle = g.shadowColor = '#4fd1ff'; g.lineWidth = 2 * dpr; g.shadowBlur = 6;
+  if (!live) {
+    g.beginPath(); g.moveTo(0, mid); g.lineTo(W, mid); g.stroke(); g.shadowBlur = 0;
+    g.fillText(st.scope === 'env' ? 'loudness · last ' + ENV_SECONDS + ' s' : 'waveform', W - 8 * dpr, H - 8 * dpr);
+    return;
+  }
+  const an = live.analyser, amp = mid - 6 * dpr;
+  if (st.scope === 'wave') {
+    const cycles = live.cycles || 3, want = Math.ceil(cycles * ctx.sampleRate / live.base);
+    let fft = 2048; while (fft < want * 2 && fft < 32768) fft *= 2;
+    if (an.fftSize !== fft) an.fftSize = fft;
+    const buf = new Float32Array(fft); an.getFloatTimeDomainData(buf);
+    let start = 0; const limit = Math.max(1, fft - want);
+    for (let i = 1; i < limit; i++) if (buf[i - 1] < 0 && buf[i] >= 0) { start = i; break; }
+    const n = Math.min(want, fft - start);
+    g.beginPath();
+    for (let i = 0; i < n; i++) { const x = W * i / (n - 1), y = mid - buf[start + i] * amp; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.stroke(); g.shadowBlur = 0;
+    g.fillText((1000 * n / ctx.sampleRate).toFixed(1) + ' ms across', W - 8 * dpr, H - 8 * dpr);
+  } else {
+    if (an.fftSize !== 4096) an.fftSize = 4096;
+    const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf);
+    let pk = 0; for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i]); if (v > pk) pk = v; }
+    const now = performance.now() / 1000;
+    st.env.push([now, pk]);
+    while (st.env.length && st.env[0][0] < now - ENV_SECONDS) st.env.shift();
+    g.fillStyle = 'rgba(79,209,255,0.22)';
+    g.beginPath(); g.moveTo(0, mid);
+    st.env.forEach(([t, p]) => g.lineTo(W * (1 - (now - t) / ENV_SECONDS), mid - p * amp));
+    for (let i = st.env.length - 1; i >= 0; i--) { const [t, p] = st.env[i]; g.lineTo(W * (1 - (now - t) / ENV_SECONDS), mid + p * amp); }
+    g.closePath(); g.fill();
+    g.beginPath();
+    st.env.forEach(([t, p], i) => { const x = W * (1 - (now - t) / ENV_SECONDS), y = mid - p * amp; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke(); g.shadowBlur = 0;
+    g.fillStyle = 'rgba(255,255,255,0.4)';
+    g.fillText('loudness · last ' + ENV_SECONDS + ' s', W - 8 * dpr, H - 8 * dpr);
+  }
+}
+window.addEventListener('resize', () => STATIONS.forEach(st => { if (!st.live) drawScope(st); }));
+buildUI();
+</script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shruti Box</title>
+<style>
+  :root { --bg:#0a1020; --card:#10192d; --line:#1d2a45; --ink:#e8edf7; --dim:#8a97b3; --accent:#4fd1ff; --wood:#1a2540; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system, system-ui, "Inter", "Segoe UI", sans-serif; padding:28px 16px 70px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size:30px; font-weight:300; margin:0 0 4px; } h1 b { font-weight:600; }
+  .sub { color:var(--dim); margin:0 0 22px; max-width:640px; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; }
+  .row { display:flex; flex-wrap:wrap; gap:14px 22px; align-items:center; }
+  .lbl { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); }
+  .home { display:grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px 16px; align-items:center; margin-bottom: 22px; }
+  .home .big { font-size:40px; font-weight:200; letter-spacing:-.02em; line-height:1; min-width: 92px; }
+  .home .big small { font-size:14px; color:var(--dim); font-weight:400; margin-left:6px; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  button { font:inherit; cursor:pointer; border:1px solid var(--line); border-radius:8px; background:#0b1324; color:var(--ink); padding:8px 14px; }
+  button:hover { border-color:#2c3d63; }
+  button.sel { background:var(--accent); color:#05101c; border-color:var(--accent); font-weight:600; }
+  .moods { display:flex; flex-wrap:wrap; gap:8px; }
+  .flaps { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:10px; margin: 18px 0 8px; }
+  @media (max-width:560px) { .flaps { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  .flap { position:relative; height:150px; border-radius:10px; border:1px solid var(--line); background:var(--wood); overflow:hidden; cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+  .flap .slat { position:absolute; left:6px; right:6px; top:6px; bottom:6px; background:linear-gradient(#22304f,#182440); border-radius:7px; border:1px solid #2a3a5e; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+  .flap .hole { position:absolute; left:6px; right:6px; top:6px; bottom:6px; border-radius:7px; background:radial-gradient(ellipse at 50% 30%, rgba(79,209,255,.35), rgba(79,209,255,.04) 60%, transparent); opacity:0; transition: opacity .3s; }
+  .flap.open .slat { transform: translateY(78%); }
+  .flap.open .hole { opacity:1; }
+  .flap .name { position:absolute; left:0; right:0; top:14px; text-align:center; font-weight:600; font-size:14px; pointer-events:none; }
+  .flap .ratio { position:absolute; left:0; right:0; top:36px; text-align:center; font-size:12px; color:var(--dim); pointer-events:none; }
+  .flap .key { position:absolute; right:10px; bottom:8px; font:11px ui-monospace, Menlo, monospace; color:var(--dim); pointer-events:none; }
+  .flap.open .name { color:var(--accent); text-shadow:0 0 12px rgba(79,209,255,.6); }
+  .flap.open .ratio { color:#c9e9f7; }
+  .rules { color:var(--dim); font-size:13px; margin: 0 0 18px; }
+  .rules b { color:var(--ink); font-weight:600; }
+  .bellows { display:grid; grid-template-columns: minmax(0,1fr) 220px; gap:16px; margin-top: 6px; }
+  @media (max-width:640px) { .bellows { grid-template-columns: minmax(0,1fr); } }
+  .pad { position:relative; height:120px; border-radius:12px; border:1px dashed #2c3d63; background:#0b1324; display:flex; align-items:center; justify-content:center; color:var(--dim); cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none; overflow:hidden; }
+  .pad .fill { position:absolute; left:0; bottom:0; top:0; width:0%; background:linear-gradient(90deg, rgba(79,209,255,.05), rgba(79,209,255,.25)); pointer-events:none; }
+  .pad span { position:relative; }
+  .pad.pressing { border-style:solid; border-color:var(--accent); }
+  .side { display:flex; flex-direction:column; gap:10px; }
+  .meter { height:8px; background:#0b1324; border-radius:4px; overflow:hidden; border:1px solid var(--line); }
+  .meter i { display:block; height:100%; width:0; background:var(--accent); box-shadow:0 0 10px var(--accent); }
+  .scopes { display:grid; grid-template-columns: 1.4fr 1fr; gap:12px; margin-top:18px; }
+  @media (max-width:640px) { .scopes { grid-template-columns: minmax(0,1fr); } }
+  canvas { display:block; width:100%; height:110px; background:#070c18; border:1px solid var(--line); border-radius:8px; }
+  .foot { color:var(--dim); font-size:13px; margin-top:22px; }
+  kbd { font:12px ui-monospace, Menlo, monospace; background:#0b1324; border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><b>Shruti Box</b> · a drone you cannot play wrong</h1>
+  <p class="sub">Pick a home note. Every flap is tuned to home in a pure ratio, and the flaps that would clash close each other. Hold the bellows or let it pump itself.</p>
+
+  <div class="box">
+    <div class="home">
+      <div class="lbl">Home</div>
+      <input id="home" type="range" min="43" max="62" step="1" value="48" aria-label="Home note">
+      <div class="big"><span id="home-name">C3</span><small id="home-hz">130.8 Hz</small></div>
+    </div>
+
+    <div class="row" style="justify-content:space-between">
+      <div class="moods" id="moods"></div>
+      <button id="play" class="sel">Start</button>
+    </div>
+
+    <div class="flaps" id="flaps"></div>
+    <p class="rules"><b>Fourth</b> and <b>Fifth</b> close each other. <b>Bright</b> and <b>Dark</b> close each other. Everything else can be open together. Keys <kbd>1</kbd>–<kbd>6</kbd> toggle flaps, <kbd>Space</kbd> starts and stops.</p>
+
+    <div class="bellows">
+      <div class="pad" id="pad"><div class="fill" id="pad-fill"></div><span id="pad-text">Hold here to pump · slide up for more air</span></div>
+      <div class="side">
+        <div class="lbl">Air pressure</div>
+        <div class="meter"><i id="meter"></i></div>
+        <button id="auto" class="sel">Auto pump: on</button>
+        <div class="lbl" style="margin-top:6px">Reed drift <output id="drift-out">3 ¢</output></div>
+        <input id="drift" type="range" min="0" max="12" step="0.5" value="3">
+      </div>
+    </div>
+
+    <div class="scopes">
+      <canvas id="env"></canvas>
+      <canvas id="wave"></canvas>
+    </div>
+  </div>
+
+  <p class="foot">Each flap is one reed: a band-limited sawtooth-like wave, a small slow drift, a soft onset when it opens, and a slight flattening under air pressure, run through two body resonances and a little breath noise. Companion to <a href="drones.html" style="color:inherit">Drone Anatomy</a> and <a href="index.html" style="color:inherit">the tone generator</a>.</p>
+</div>
+
+<script>
+'use strict';
+// ---------- Tuning ----------
+const NOTE = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+const midiName = m => NOTE[m % 12] + (Math.floor(m / 12) - 1);
+// Flaps, ordered by pitch. ratio is relative to home. excl names the flap it closes.
+const FLAPS = [
+  { id: 'home',   name: 'Home',   ratio: 1,     label: '1 : 1', key: '1' },
+  { id: 'dark',   name: 'Dark',   ratio: 6 / 5, label: '6 : 5 · minor third', key: '2', excl: 'bright' },
+  { id: 'bright', name: 'Bright', ratio: 5 / 4, label: '5 : 4 · major third', key: '3', excl: 'dark' },
+  { id: 'fourth', name: 'Fourth', ratio: 4 / 3, label: '4 : 3', key: '4', excl: 'fifth' },
+  { id: 'fifth',  name: 'Fifth',  ratio: 3 / 2, label: '3 : 2', key: '5', excl: 'fourth' },
+  { id: 'octave', name: 'Octave', ratio: 2,     label: '2 : 1', key: '6' },
+];
+const MOODS = [
+  { name: 'Plain',   open: ['home', 'octave'] },
+  { name: 'Classic', open: ['home', 'fifth', 'octave'] },
+  { name: 'Open',    open: ['home', 'fourth', 'octave'] },
+  { name: 'Bright',  open: ['home', 'bright', 'fifth', 'octave'] },
+  { name: 'Dark',    open: ['home', 'dark', 'fifth', 'octave'] },
+];
+
+// ---------- State ----------
+const state = { home: 48, open: new Set(['home', 'fifth', 'octave']), running: false, auto: true, drift: 3, pressure: 0, target: 0, padDown: false, padY: 1 };
+const $ = id => document.getElementById(id);
+const els = { home: $('home'), homeName: $('home-name'), homeHz: $('home-hz'), moods: $('moods'), flaps: $('flaps'), play: $('play'), pad: $('pad'), padFill: $('pad-fill'), padText: $('pad-text'), meter: $('meter'), auto: $('auto'), drift: $('drift'), driftOut: $('drift-out'), env: $('env'), wave: $('wave') };
+
+// ---------- Audio ----------
+let ctx = null, A = null;   // A = audio graph
+function reedWave() {
+  // Sawtooth-like reed spectrum: all harmonics, ~1/n, with a mild lift on 3..7 (reedy) and a gentle roll-off above 30.
+  const N = 64, re = new Float32Array(N), im = new Float32Array(N);
+  for (let n = 1; n < N; n++) {
+    let a = 1 / Math.pow(n, 1.05);
+    if (n >= 3 && n <= 7) a *= 1.35;
+    if (n > 30) a *= Math.pow(0.9, n - 30);
+    im[n] = a;
+  }
+  return ctx.createPeriodicWave(re, im, { disableNormalization: false });
+}
+function ensureAudio() {
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const g = (v) => { const n = ctx.createGain(); n.gain.value = v; return n; };
+  A = { reeds: {}, wave: reedWave() };
+  // Body: reeds -> sum -> two resonances -> tone lowpass -> highpass -> pressure -> master
+  A.sum = g(1);
+  A.f1 = ctx.createBiquadFilter(); A.f1.type = 'peaking'; A.f1.frequency.value = 620; A.f1.Q.value = 1.6; A.f1.gain.value = 5;
+  A.f2 = ctx.createBiquadFilter(); A.f2.type = 'peaking'; A.f2.frequency.value = 1750; A.f2.Q.value = 2.2; A.f2.gain.value = 4;
+  A.lp = ctx.createBiquadFilter(); A.lp.type = 'lowpass'; A.lp.frequency.value = 2500; A.lp.Q.value = 0.3;
+  A.hp = ctx.createBiquadFilter(); A.hp.type = 'highpass'; A.hp.frequency.value = 70;
+  A.pressure = g(0); A.master = g(0.5); A.an = ctx.createAnalyser(); A.an.fftSize = 8192;
+  A.sum.connect(A.f1).connect(A.f2).connect(A.lp).connect(A.hp).connect(A.pressure).connect(A.master).connect(ctx.destination);
+  A.master.connect(A.an);
+  A.bend = ctx.createConstantSource(); A.bend.offset.value = 0; A.bend.start();   // shared pitch bend from air pressure (cents)
+  // Breath noise
+  const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  A.noise = ctx.createBufferSource(); A.noise.buffer = buf; A.noise.loop = true; A.noise.start();
+  A.nbp = ctx.createBiquadFilter(); A.nbp.type = 'bandpass'; A.nbp.frequency.value = 2600; A.nbp.Q.value = 0.7;
+  A.ngain = g(0);
+  A.noise.connect(A.nbp).connect(A.ngain).connect(A.pressure);
+  // Reeds are created once and stay running; opening a flap fades its gain in.
+  FLAPS.forEach((f, i) => {
+    const o = ctx.createOscillator(); o.setPeriodicWave(A.wave); o.frequency.value = midiHz(state.home) * f.ratio;
+    const gate = g(0), lfo = ctx.createOscillator(), lg = g(state.drift);
+    lfo.type = 'sine'; lfo.frequency.value = 1 / (17 + i * 6.3);
+    lfo.connect(lg).connect(o.detune);
+    A.bend.connect(o.detune);
+    o.connect(gate).connect(A.sum); o.start(); lfo.start();
+    A.reeds[f.id] = { o, gate, lg };
+  });
+  retune();
+}
+const now = () => ctx.currentTime;
+function retune() {
+  if (!A) return;
+  const h = midiHz(state.home);
+  FLAPS.forEach(f => A.reeds[f.id].o.frequency.setTargetAtTime(h * f.ratio, now(), 0.05));
+}
+function applyFlap(id, open) {
+  if (!A) return;
+  const r = A.reeds[id], t = now();
+  r.gate.gain.cancelScheduledValues(t); r.gate.gain.setValueAtTime(r.gate.gain.value, t);
+  if (open) {
+    // A reed "speaks": it swells in over ~250 ms and its pitch settles up from slightly flat.
+    r.gate.gain.linearRampToValueAtTime(0.22, t + 0.28);
+    r.o.detune.cancelScheduledValues(t); r.o.detune.setValueAtTime(-25, t); r.o.detune.linearRampToValueAtTime(0, t + 0.35);
+  } else {
+    r.gate.gain.linearRampToValueAtTime(0, t + 0.18);
+  }
+}
+function applyPressure(p) {
+  if (!A) return;
+  const t = now(), running = state.running ? 1 : 0;
+  const level = Math.pow(p, 1.35) * running;
+  A.pressure.gain.setTargetAtTime(level, t, 0.03);
+  A.lp.frequency.setTargetAtTime(1400 + 4200 * p, t, 0.05);        // more air = brighter
+  A.ngain.gain.setTargetAtTime(0.035 * p * (state.open.size ? 1 : 0.4), t, 0.05);
+  A.bend.offset.setTargetAtTime(-9 * p, t, 0.05);                 // free reeds flatten a little under pressure
+}
+
+// ---------- Playing model ----------
+// Pressure follows a target: quick to rise when you push, slow to fall (the bellows is a reservoir).
+let last = performance.now(), autoPhase = 0;
+function tick() {
+  const nowMs = performance.now(), dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
+  if (state.padDown) state.target = 0.35 + 0.65 * state.padY;
+  else if (state.auto) { autoPhase += dt * 0.19; const s = Math.sin(autoPhase * 2 * Math.PI); state.target = 0.62 + 0.28 * Math.sign(s) * Math.pow(Math.abs(s), 0.6); }
+  else state.target = 0.12;
+  const k = state.target > state.pressure ? 4.5 : 1.1;
+  state.pressure += (state.target - state.pressure) * Math.min(1, k * dt);
+  if (!state.running) state.pressure += (0 - state.pressure) * Math.min(1, 1.5 * dt);
+  applyPressure(state.pressure);
+  els.meter.style.width = Math.round(state.pressure * 100) + '%';
+  els.padFill.style.width = Math.round(state.pressure * 100) + '%';
+  drawEnv(); drawWave();
+  requestAnimationFrame(tick);
+}
+
+// ---------- UI ----------
+function renderHome() { els.homeName.textContent = midiName(state.home); els.homeHz.textContent = midiHz(state.home).toFixed(1) + ' Hz'; }
+els.home.oninput = () => { state.home = +els.home.value; renderHome(); retune(); };
+function setFlap(id, open) {
+  const f = FLAPS.find(x => x.id === id);
+  if (open) { state.open.add(id); if (f.excl && state.open.has(f.excl)) { state.open.delete(f.excl); applyFlap(f.excl, false); } }
+  else state.open.delete(id);
+  applyFlap(id, open);
+  renderFlaps(); renderMoods();
+}
+function renderFlaps() { FLAPS.forEach(f => f.el.classList.toggle('open', state.open.has(f.id))); }
+function renderMoods() {
+  MOODS.forEach(m => { const same = m.open.length === state.open.size && m.open.every(x => state.open.has(x)); m.el.classList.toggle('sel', same); });
+}
+FLAPS.forEach(f => {
+  const el = document.createElement('div'); el.className = 'flap'; el.setAttribute('role', 'button'); el.setAttribute('aria-pressed', 'false');
+  el.innerHTML = `<div class="hole"></div><div class="slat"></div><div class="name">${f.name}</div><div class="ratio">${f.label}</div><div class="key">${f.key}</div>`;
+  el.onclick = () => { start(true); setFlap(f.id, !state.open.has(f.id)); };
+  f.el = el; els.flaps.appendChild(el);
+});
+MOODS.forEach(m => {
+  const b = document.createElement('button'); b.textContent = m.name;
+  b.onclick = () => { start(true); FLAPS.forEach(f => { const want = m.open.includes(f.id); if (want !== state.open.has(f.id)) { if (want) state.open.add(f.id); else state.open.delete(f.id); applyFlap(f.id, want); } }); renderFlaps(); renderMoods(); };
+  m.el = b; els.moods.appendChild(b);
+});
+function start(on) {
+  ensureAudio();
+  if (on && !state.running) { state.running = true; FLAPS.forEach(f => { if (state.open.has(f.id)) applyFlap(f.id, true); }); }
+  if (!on) { state.running = false; }
+  els.play.textContent = state.running ? 'Stop' : 'Start';
+  els.play.classList.toggle('sel', !state.running);
+}
+els.play.onclick = () => start(!state.running);
+els.auto.onclick = () => { state.auto = !state.auto; els.auto.textContent = 'Auto pump: ' + (state.auto ? 'on' : 'off'); els.auto.classList.toggle('sel', state.auto); };
+els.drift.oninput = () => { state.drift = +els.drift.value; els.driftOut.textContent = state.drift.toFixed(1) + ' ¢'; if (A) FLAPS.forEach(f => A.reeds[f.id].lg.gain.setTargetAtTime(state.drift, now(), 0.2)); };
+// Bellows pad: hold to push air, vertical position = how hard.
+const padPos = e => { const r = els.pad.getBoundingClientRect(); state.padY = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height)); };
+els.pad.addEventListener('pointerdown', e => { start(true); els.pad.setPointerCapture(e.pointerId); state.padDown = true; padPos(e); els.pad.classList.add('pressing'); els.padText.textContent = 'pumping'; });
+els.pad.addEventListener('pointermove', e => { if (state.padDown) padPos(e); });
+const padUp = () => { state.padDown = false; els.pad.classList.remove('pressing'); els.padText.textContent = 'Hold here to pump · slide up for more air'; };
+els.pad.addEventListener('pointerup', padUp); els.pad.addEventListener('pointercancel', padUp);
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === ' ') { e.preventDefault(); start(!state.running); return; }
+  const f = FLAPS.find(x => x.key === e.key); if (f) { start(true); setFlap(f.id, !state.open.has(f.id)); }
+});
+
+// ---------- Scopes ----------
+const ENV_S = 8, env = [];
+function prep(c) { const dpr = window.devicePixelRatio || 1, w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } const g = c.getContext('2d'); g.fillStyle = '#070c18'; g.fillRect(0, 0, c.width, c.height); g.strokeStyle = 'rgba(255,255,255,0.14)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, c.height / 2); g.lineTo(c.width, c.height / 2); g.stroke(); g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = (11 * dpr) + 'px system-ui'; g.textAlign = 'right'; g.strokeStyle = g.shadowColor = '#4fd1ff'; g.lineWidth = 2 * dpr; g.shadowBlur = 6; return { g, W: c.width, H: c.height, dpr }; }
+function drawEnv() {
+  const { g, W, H, dpr } = prep(els.env), mid = H / 2, amp = mid - 6 * dpr;
+  let pk = 0;
+  if (A) { const b = new Float32Array(2048); A.an.fftSize = 8192; A.an.getFloatTimeDomainData(b); for (let i = 0; i < b.length; i++) pk = Math.max(pk, Math.abs(b[i])); }
+  const t = performance.now() / 1000; env.push([t, pk]); while (env.length && env[0][0] < t - ENV_S) env.shift();
+  g.fillStyle = 'rgba(79,209,255,0.22)'; g.beginPath(); g.moveTo(0, mid);
+  env.forEach(([tt, p]) => g.lineTo(W * (1 - (t - tt) / ENV_S), mid - p * amp));
+  for (let i = env.length - 1; i >= 0; i--) g.lineTo(W * (1 - (t - env[i][0]) / ENV_S), mid + env[i][1] * amp);
+  g.closePath(); g.fill();
+  g.beginPath(); env.forEach(([tt, p], i) => { const x = W * (1 - (t - tt) / ENV_S), y = mid - p * amp; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.shadowBlur = 0;
+  g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillText('loudness · last 8 s · the breathing', W - 8 * dpr, H - 8 * dpr);
+}
+function drawWave() {
+  const { g, W, H, dpr } = prep(els.wave), mid = H / 2, amp = mid - 6 * dpr;
+  if (!A) { g.shadowBlur = 0; return; }
+  const base = midiHz(state.home), want = Math.ceil(2 * ctx.sampleRate / base);
+  const b = new Float32Array(A.an.fftSize); A.an.getFloatTimeDomainData(b);
+  let s = 0; for (let i = 1; i < b.length - want; i++) if (b[i - 1] < 0 && b[i] >= 0) { s = i; break; }
+  const n = Math.min(want, b.length - s);
+  g.beginPath(); for (let i = 0; i < n; i++) { const x = W * i / (n - 1), y = mid - b[s + i] * amp * 2.2; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); g.shadowBlur = 0;
+  g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillText('two cycles of home', W - 8 * dpr, H - 8 * dpr);
+}
+
+renderHome(); renderFlaps(); renderMoods();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

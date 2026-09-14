@@ -1,0 +1,8 @@
+# Copyrighted reference material, kept local only
+reference/
+original/
+# Local safety copies
+*.backup.html
+*.charcoal.html
+*.pre-dark.html
+.DS_Store

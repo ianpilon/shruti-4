@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atmosphere Pads</title>
+<style>
+  :root { --bg:#0a1020; --card:#10192d; --line:#1d2a45; --ink:#e8edf7; --dim:#8a97b3; --accent:#4fd1ff; --on:#3ddc84; color-scheme: dark; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 -apple-system, system-ui, "Inter", sans-serif; display:flex; flex-direction:column; align-items:center; gap:16px; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); -webkit-user-select:none; user-select:none; }
+  h1 { font-size:13px; letter-spacing:.32em; text-transform:uppercase; font-weight:600; color:var(--dim); margin:6px 0 0; }
+  .pedal { width:min(560px, 100%); background:linear-gradient(#141d33, #0e1629); border:1px solid #2a3a5e; border-radius:26px; padding:26px 26px 22px; box-shadow:0 20px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05); display:grid; grid-template-columns: 96px minmax(0,1fr) 96px; grid-template-rows:auto auto auto; gap:14px 16px; align-items:center; }
+  .disp { grid-column:2; justify-self:center; width:120px; height:120px; border-radius:50%; background:radial-gradient(circle at 50% 35%, #1b2747, #0a1020 75%); border:1px solid #2f4370; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:inset 0 0 30px rgba(0,0,0,.6); }
+  .disp .key { font-size:52px; font-weight:200; line-height:1; letter-spacing:-.02em; }
+  .disp .key.on { color:var(--accent); text-shadow:0 0 22px rgba(79,209,255,.7); }
+  .disp .tn { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin-top:6px; }
+  .foot { width:78px; height:78px; border-radius:50%; justify-self:center; background:radial-gradient(circle at 50% 40%, #3a4a70, #1a2440 70%); border:2px solid #4a5d8a; box-shadow:0 6px 14px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.08); cursor:pointer; touch-action:manipulation; position:relative; }
+  .foot::after { content:""; position:absolute; inset:14px; border-radius:50%; background:radial-gradient(circle at 50% 40%, #556aa0, #2a3a60 75%); }
+  .foot:active::after { inset:16px; }
+  .foot.lit::after { background:radial-gradient(circle at 50% 40%, #b8f2ff, #4fd1ff 70%); box-shadow:0 0 24px rgba(79,209,255,.8); }
+  .lbl { text-align:center; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); margin-top:6px; }
+  .side { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .layers { grid-column:2; display:flex; flex-direction:column; align-items:center; gap:14px; padding:6px 0; }
+  .layer { display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; touch-action:manipulation; }
+  .led { width:22px; height:22px; border-radius:50%; background:#141c30; border:2px solid #2f4370; box-shadow:inset 0 2px 4px rgba(0,0,0,.6); transition:all .2s; }
+  .layer.on .led { background:var(--on); border-color:#7cf0ad; box-shadow:0 0 16px rgba(61,220,132,.8); }
+  .layer .nm { font-size:11px; letter-spacing:.26em; text-transform:uppercase; color:var(--dim); }
+  .layer.on .nm { color:var(--ink); }
+  .tone { grid-column:2; display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+  .tone button { font:inherit; font-size:12px; letter-spacing:.12em; text-transform:uppercase; padding:8px 14px; border-radius:10px; border:1px solid var(--line); background:#0b1324; color:var(--dim); cursor:pointer; }
+  .tone button.on { border-color:var(--accent); color:var(--accent); }
+  .bottom { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; gap:10px; color:var(--dim); font-size:12px; }
+  .mini { display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+  .mini input { width:110px; accent-color:var(--accent); }
+  .mini output { color:var(--ink); letter-spacing:0; text-transform:none; min-width:34px; }
+  .note { width:min(560px, 100%); color:var(--dim); font-size:13px; line-height:1.5; }
+  .note b { color:var(--ink); }
+  kbd { font:11px ui-monospace, Menlo, monospace; background:#0b1324; border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+</style>
+</head>
+<body>
+  <h1>Atmosphere</h1>
+  <div class="pedal">
+    <div class="side"><div class="foot" id="patch-up" title="next layer"></div><div class="lbl">▲ patch</div></div>
+    <div class="disp"><div class="key" id="key">C</div><div class="tn" id="tn">neutral</div></div>
+    <div class="side"><div class="foot" id="key-up" title="key up"></div><div class="lbl">▲ key</div></div>
+
+    <div class="side"><div class="foot" id="patch-down" title="previous layer"></div><div class="lbl">▼ patch</div></div>
+    <div class="layers" id="layers"></div>
+    <div class="side"><div class="foot" id="key-down" title="key down"></div><div class="lbl">▼ key</div></div>
+
+    <div class="side"><div class="foot" id="abort"></div><div class="lbl">abort</div></div>
+    <div class="tone" id="tone"></div>
+    <div class="side"><div class="foot" id="engage"></div><div class="lbl">engage</div></div>
+
+    <div class="bottom">
+      <span class="mini"><span>Level</span><input id="level" type="range" min="0" max="100" value="70"><output id="level-out">70%</output></span>
+      <span>Tap a light to stack layers</span>
+      <span class="mini"><span>Room</span><input id="room" type="range" min="0" max="100" value="45"><output id="room-out">45%</output></span>
+    </div>
+  </div>
+  <p class="note">A synthesized recreation of the Aerospace Atmosphere pads, built from measurements of their demo loops rather than samples: <b>root and fifth</b> in every tonality, a faint second for <b>Major</b> and a faint minor third for <b>Minor</b>, a low-pass ceiling near 1 kHz, separate left and right voices that drift apart, and loudness swells of 6 to 30 seconds. Each layer is a different register and voicing, as in the original: Stratosphere and Thermosphere are bass, Troposphere and Mesosphere mid, Exosphere the only bright one. <kbd>Space</kbd> engages and aborts, <kbd>←</kbd> <kbd>→</kbd> change key, <kbd>↑</kbd> <kbd>↓</kbd> change layer.</p>
+
+<script>
+'use strict';
+const NOTE = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const TONES = ['neutral', 'major', 'minor'];
+// Voicings measured from the demos, as (semitones from the root, level). Root octave is per layer.
+// neutral: root + fifth. major: + a faint 2nd (D over C) and a trace of the 3rd. minor: + a faint b3, trace of 2nd.
+const COLOUR = { neutral: [], major: [[2, 0.10], [4, 0.03]], minor: [[3, 0.12], [2, 0.03]] };
+const LAYERS = [
+  { id: 'exosphere',    name: 'Exosphere',    rootMidi: 60, voices: [[0, 1], [7, 0.6], [12, 0.85], [19, 0.5], [24, 0.5], [31, 0.15]], lp: 3200, swell: 8.4,  depth: 9,  extra: 'bright' },
+  { id: 'thermosphere', name: 'Thermosphere', rootMidi: 48, voices: [[0, 1], [-5, 0.5], [7, 0.45], [12, 0.3]],             lp: 450,  swell: 4.5,  depth: 11, extra: 'pulse' },
+  { id: 'mesosphere',   name: 'Mesosphere',   rootMidi: 60, voices: [[0, 1], [-5, 0.3], [7, 0.5], [12, 0.3], [14, 0.08]], lp: 1000, swell: 28,   depth: 8 },
+  { id: 'stratosphere', name: 'Stratosphere', rootMidi: 48, voices: [[0, 1], [-5, 0.7], [-12, 0.35], [7, 0.5], [12, 0.25]], lp: 600,  swell: 6.1,  depth: 10 },
+  { id: 'troposphere',  name: 'Troposphere',  rootMidi: 60, voices: [[0, 1], [-5, 0.45], [12, 0.65], [7, 0.5], [19, 0.2]], lp: 1700, swell: 12,   depth: 10 },
+];
+const state = { key: 0, tone: 'neutral', on: new Set(['troposphere']), engaged: false, level: 0.7, room: 0.45 };
+const $ = id => document.getElementById(id);
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+
+// ---------- Audio ----------
+let ctx = null, A = null;
+function impulse(sec, decay) {
+  const len = Math.floor(ctx.sampleRate * sec), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+  return buf;
+}
+function darkWave() {   // harmonics falling like 1/n^2.2: closer to a triangle than a saw, then the low-pass does the rest
+  const N = 24, re = new Float32Array(N), im = new Float32Array(N);
+  for (let n = 1; n < N; n++) im[n] = 1 / Math.pow(n, 1.7);
+  return ctx.createPeriodicWave(re, im);
+}
+function ensureAudio() {
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; };
+  A = { g, wave: darkWave(), layers: {} };
+  A.engage = g(0); A.master = g(state.level);
+  A.conv = ctx.createConvolver(); A.conv.buffer = impulse(4.5, 2.6); A.wet = g(state.room);
+  A.revLp = ctx.createBiquadFilter(); A.revLp.type = 'lowpass'; A.revLp.frequency.value = 3000;
+  A.engage.connect(A.master).connect(ctx.destination);
+  A.engage.connect(A.conv).connect(A.revLp).connect(A.wet).connect(A.master);
+  LAYERS.forEach(buildLayer);
+}
+function buildLayer(L) {
+  const g = A.g, lay = { voices: [], colour: [] };
+  lay.out = g(0);                                   // layer on/off (fades)
+  lay.swell = g(1);                                 // slow loudness swell
+  lay.lp = ctx.createBiquadFilter(); lay.lp.type = 'lowpass'; lay.lp.frequency.value = L.lp; lay.lp.Q.value = 0.4;
+  lay.merge = ctx.createChannelMerger(2);
+  lay.merge.connect(lay.lp).connect(lay.swell).connect(lay.out).connect(A.engage);
+  // Swell: sine LFO with the measured period, depth in dB, through a gain that offsets a constant.
+  const dep = Math.pow(10, -L.depth / 20);          // e.g. 10 dB -> 0.316
+  lay.swellLfo = ctx.createOscillator(); lay.swellLfo.frequency.value = 1 / L.swell;
+  const lg = g((1 - dep) / 2); lay.swellLfo.connect(lg).connect(lay.swell.gain); lay.swell.gain.value = (1 + dep) / 2; lay.swellLfo.start();
+  if (L.extra === 'pulse') { const tr = ctx.createOscillator(); tr.frequency.value = 1.75; const tg = g(0.12); tr.connect(tg).connect(lay.swell.gain); tr.start(); }
+  const mk = (semis, lvl, list) => {
+    const v = { semis, lvl, L: null, R: null, gains: [] };
+    [0, 1].forEach(ch => {
+      const o = ctx.createOscillator(); o.setPeriodicWave(A.wave);
+      const drift = ctx.createOscillator(), dg = g(3 + Math.random() * 2);   // a few cents, each side its own pace
+      drift.frequency.value = 1 / (11 + Math.random() * 20);
+      drift.connect(dg).connect(o.detune); o.detune.value = ch ? 4 : -4;
+      // Decorrelate the ears: the right copy of every voice arrives 8 to 26 ms later, a different offset per voice.
+      const dl = ctx.createDelay(0.05); dl.delayTime.value = ch ? 0.008 + Math.random() * 0.018 : 0;
+      const sg = g(lvl * 0.2); v.gains.push(sg);
+      o.connect(sg).connect(dl).connect(lay.merge, 0, ch); o.start(); drift.start();
+      v[ch ? 'R' : 'L'] = o;
+    });
+    if (L.extra === 'bright' && semis >= 12) { /* Exosphere: leave upper voices brighter by skipping nothing; the layer lp is already higher */ }
+    list.push(v);
+  };
+  L.voices.forEach(([s, l]) => mk(s, l, lay.voices));
+  [[2, 0], [3, 0], [4, 0]].forEach(([s]) => mk(s, 0, lay.colour));   // colour voices exist always, level set by tonality
+  A.layers[L.id] = lay;
+  tuneLayer(L);
+}
+function tuneLayer(L) {
+  const lay = A.layers[L.id], root = L.rootMidi + state.key, t = ctx.currentTime;
+  lay.voices.forEach(v => { const hz = midiHz(root + v.semis); v.L.frequency.setTargetAtTime(hz, t, 0.05); v.R.frequency.setTargetAtTime(hz, t, 0.05); });
+  const col = COLOUR[state.tone];
+  lay.colour.forEach(v => {
+    const hz = midiHz(root + v.semis); v.L.frequency.setTargetAtTime(hz, t, 0.05); v.R.frequency.setTargetAtTime(hz, t, 0.05);
+    const found = col.find(([s]) => s === v.semis); v.gains.forEach(gn => gn.gain.setTargetAtTime((found ? found[1] : 0) * 0.2, t, 0.4));
+  });
+}
+function applyLayers() {
+  if (!A) return;
+  const t = ctx.currentTime;
+  LAYERS.forEach(L => { const lay = A.layers[L.id], want = state.on.has(L.id) ? 1 : 0; lay.out.gain.cancelScheduledValues(t); lay.out.gain.setValueAtTime(lay.out.gain.value, t); lay.out.gain.linearRampToValueAtTime(want, t + (want ? 2.5 : 1.5)); });
+}
+function setEngaged(on) {
+  ensureAudio();
+  state.engaged = on;
+  const t = ctx.currentTime, gn = A.engage.gain;
+  gn.cancelScheduledValues(t); gn.setValueAtTime(gn.value, t); gn.linearRampToValueAtTime(on ? 1 : 0, t + (on ? 3 : 2.5));
+  $('engage').classList.toggle('lit', on); $('key').classList.toggle('on', on);
+}
+
+// ---------- UI ----------
+LAYERS.forEach(L => {
+  const el = document.createElement('div'); el.className = 'layer'; el.innerHTML = `<div class="led"></div><div class="nm">${L.name}</div>`;
+  el.onclick = () => { ensureAudio(); if (state.on.has(L.id)) { if (state.on.size > 1) state.on.delete(L.id); } else state.on.add(L.id); render(); applyLayers(); };
+  L.el = el; $('layers').appendChild(el);
+});
+TONES.forEach(tn => { const b = document.createElement('button'); b.textContent = tn; b.onclick = () => { ensureAudio(); state.tone = tn; render(); LAYERS.forEach(tuneLayer); }; $('tone').appendChild(b); });
+function render() {
+  $('key').textContent = NOTE[state.key]; $('tn').textContent = state.tone;
+  LAYERS.forEach(L => L.el.classList.toggle('on', state.on.has(L.id)));
+  [...$('tone').children].forEach(b => b.classList.toggle('on', b.textContent === state.tone));
+}
+function setKey(d) { ensureAudio(); state.key = (state.key + d + 12) % 12; render(); LAYERS.forEach(tuneLayer); }
+function stepPatch(d) {   // pedal-style: move the single active layer; if several are lit, collapse to the next one
+  ensureAudio();
+  const order = LAYERS.map(L => L.id).reverse();   // troposphere .. exosphere, bottom to top
+  const cur = order.findIndex(id => state.on.has(id));
+  const next = Math.max(0, Math.min(order.length - 1, (cur < 0 ? 0 : cur) + d));
+  state.on = new Set([order[next]]); render(); applyLayers();
+}
+$('engage').onclick = () => setEngaged(true);
+$('abort').onclick = () => setEngaged(false);
+$('key-up').onclick = () => setKey(1); $('key-down').onclick = () => setKey(-1);
+$('patch-up').onclick = () => stepPatch(1); $('patch-down').onclick = () => stepPatch(-1);
+$('level').oninput = () => { state.level = +$('level').value / 100; $('level-out').textContent = $('level').value + '%'; if (A) A.master.gain.setTargetAtTime(state.level, ctx.currentTime, 0.05); };
+$('room').oninput = () => { state.room = +$('room').value / 100; $('room-out').textContent = $('room').value + '%'; if (A) A.wet.gain.setTargetAtTime(state.room, ctx.currentTime, 0.05); };
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === ' ') { e.preventDefault(); setEngaged(!state.engaged); }
+  else if (e.key === 'ArrowRight') setKey(1); else if (e.key === 'ArrowLeft') setKey(-1);
+  else if (e.key === 'ArrowUp') stepPatch(1); else if (e.key === 'ArrowDown') stepPatch(-1);
+});
+render();
+</script>
+</body>
+</html>
